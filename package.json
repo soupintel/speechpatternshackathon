@@ -1,0 +1,15 @@
+{
+  "name": "speech-constellation",
+  "version": "0.1.0",
+  "description": "Live speech visualized as a growing, glowing node-and-edge network graph.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}

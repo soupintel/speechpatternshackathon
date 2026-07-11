@@ -1,0 +1,274 @@
+/* style.css — "signal bench" aesthetic.
+   Flat black, hairline rules, all-monospace, one accent color. Styled like a
+   piece of lab equipment / terminal instrument, not a web dashboard. This is
+   also the art direction for the final piece: technical decode overlay. */
+
+:root {
+  --bg: #050505;
+  --panel: #0a0a0a;
+  --line: #1f1f1f;
+  --line-bright: #333;
+  --text: #c9c9c9;
+  --text-dim: #666;
+  --accent: #4efac0; /* instrument green */
+  --accent-dim: #1c5c46;
+  --warn: #f2b544;
+  --err: #f26d6d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+#app {
+  max-width: 940px;
+  margin: 0 auto;
+  padding: 20px 20px 60px;
+}
+
+/* Header — a strip with an ID plate, like a device faceplate */
+.bench-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid var(--line-bright);
+  padding: 10px 14px;
+  margin-bottom: 16px;
+}
+
+.bench-header__title {
+  letter-spacing: 0.18em;
+  font-weight: 700;
+  color: #fff;
+}
+
+.bench-header__mark {
+  color: var(--accent);
+}
+
+.bench-header__meta {
+  color: var(--text-dim);
+  letter-spacing: 0.12em;
+  font-size: 11px;
+}
+
+.hint {
+  color: var(--text-dim);
+  font-size: 12px;
+  max-width: 640px;
+  margin: 0 0 18px;
+}
+
+/* Controls row */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 20px;
+}
+
+#micButton {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent-dim);
+  padding: 8px 20px;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+}
+
+#micButton:hover {
+  border-color: var(--accent);
+  background: rgba(78, 250, 192, 0.06);
+}
+
+.sens {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sens__label {
+  color: var(--text-dim);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+}
+
+.sens__value {
+  color: var(--text);
+  font-size: 11px;
+  min-width: 4ch;
+}
+
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 140px;
+  height: 2px;
+  background: var(--line-bright);
+  outline: none;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 16px;
+  background: var(--accent);
+  cursor: ew-resize;
+  border-radius: 0;
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 10px;
+  height: 16px;
+  background: var(--accent);
+  cursor: ew-resize;
+  border: none;
+  border-radius: 0;
+}
+
+.status {
+  margin-left: auto;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+.status--idle { color: var(--text-dim); }
+.status--pending { color: var(--warn); }
+.status--live { color: var(--accent); }
+.status--error { color: var(--err); }
+
+/* Readouts — flat cells separated by hairlines, like a meter bank */
+.readouts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  border: 1px solid var(--line);
+  margin-bottom: 24px;
+}
+
+.readout {
+  padding: 12px 14px;
+  border-right: 1px solid var(--line);
+}
+
+.readout:last-child {
+  border-right: none;
+}
+
+.readout__label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.readout__value {
+  font-size: 26px;
+  color: #fff;
+}
+
+.readout__unit {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-left: 6px;
+}
+
+.readout__value--state {
+  font-size: 15px;
+  color: var(--text-dim);
+}
+
+.readout__value--state.is-voiced {
+  color: var(--accent);
+}
+
+/* Volume meter — thin segment strip */
+.meter {
+  margin-top: 10px;
+  height: 4px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.meter__fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 60ms linear;
+}
+
+/* Section labels */
+.section-label {
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+
+.section-label__sub {
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+}
+
+/* Scope */
+#scope {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #060707;
+  border: 1px solid var(--line);
+  margin-bottom: 24px;
+}
+
+/* Unit log — table-ish rows */
+.unit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+}
+
+.unit-list:empty {
+  display: none;
+}
+
+.unit-list__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text);
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.unit-list__item:last-child {
+  border-bottom: none;
+}
+
+.unit-list__item strong {
+  color: #fff;
+  font-weight: 400;
+}
+
+.unit-list__dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+}
