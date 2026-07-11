@@ -3,64 +3,49 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SPEECH CONSTELLATION // signal bench</title>
+    <title>SPEECH CONSTELLATION</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <main id="app">
-      <header class="bench-header">
-        <div class="bench-header__title">
-          <span class="bench-header__mark">◉</span> SPEECH·CONSTELLATION
-        </div>
-        <div class="bench-header__meta">PHASE_01 / SIGNAL_BENCH</div>
-      </header>
+    <!-- The artwork: full-screen canvas behind everything -->
+    <canvas id="constellation"></canvas>
 
-      <p class="hint">
-        // calibration bench — verifies the audio signal before anything gets drawn.
-        start the mic, speak normally. every detected speech unit (word/phrase
-        between pauses) logs below. raise SENS if quiet speech reads as silence.
-      </p>
+    <!-- HUD: instrument strip overlaid on top of the artwork -->
+    <header class="hud">
+      <div class="hud__title">
+        <span class="hud__mark">◉</span> SPEECH·CONSTELLATION
+      </div>
 
-      <div class="controls">
+      <div class="hud__controls">
         <button id="micButton" type="button">START MIC</button>
+        <button id="clearButton" type="button" class="hud__clear">CLEAR</button>
         <label class="sens">
           <span class="sens__label">SENS</span>
           <input id="sensitivity" type="range" min="0.5" max="8" step="0.5" value="1" />
           <span id="sensValue" class="sens__value">1.0×</span>
         </label>
-        <span id="status" class="status status--idle">[ idle ]</span>
       </div>
 
-      <section class="readouts">
-        <div class="readout">
-          <span class="readout__label">F0 · PITCH</span>
-          <span class="readout__value"><span id="pitchValue">—</span><span class="readout__unit">Hz</span></span>
+      <div class="hud__readouts">
+        <div class="hud__cell">
+          <span class="hud__label">F0</span>
+          <span class="hud__value"><span id="pitchValue">—</span><small>Hz</small></span>
         </div>
-        <div class="readout">
-          <span class="readout__label">LVL · VOLUME</span>
-          <span class="readout__value"><span id="dbValue">—</span><span class="readout__unit">dBFS</span></span>
-          <div class="meter"><div id="volumeBar" class="meter__fill"></div></div>
+        <div class="hud__cell">
+          <span class="hud__label">LVL</span>
+          <span class="hud__value"><span id="dbValue">—</span><small>dBFS</small></span>
         </div>
-        <div class="readout">
-          <span class="readout__label">GATE · STATE</span>
-          <span id="voicedValue" class="readout__value readout__value--state">—</span>
+        <div class="hud__cell">
+          <span class="hud__label">GATE</span>
+          <span id="voicedValue" class="hud__value hud__value--state">—</span>
         </div>
-        <div class="readout">
-          <span class="readout__label">UNITS · N</span>
-          <span id="unitCount" class="readout__value">0</span>
+        <div class="hud__cell">
+          <span class="hud__label">N</span>
+          <span id="unitCount" class="hud__value">0</span>
         </div>
-      </section>
-
-      <section class="scope">
-        <div class="section-label">SIGNAL HISTORY <span class="section-label__sub">· pitch trace + volume floor · 5s window</span></div>
-        <canvas id="scope" width="900" height="220"></canvas>
-      </section>
-
-      <section class="units">
-        <div class="section-label">UNIT LOG <span class="section-label__sub">· newest first</span></div>
-        <ul id="unitList" class="unit-list"></ul>
-      </section>
-    </main>
+        <span id="status" class="status status--idle">[ idle ]</span>
+      </div>
+    </header>
 
     <script type="module" src="/src/main.js"></script>
   </body>

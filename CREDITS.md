@@ -5,9 +5,15 @@ hackathon disclosure rules. Updated every time a dependency or borrowed idea is 
 
 ## Libraries (runtime)
 
-*None yet.* Phase 1 uses only browser built-ins (Web Audio API, Canvas 2D).
-Planned for Phase 2: `d3-force` (BSD-3-Clause) — physics simulation for the
-force-directed layout. Will be recorded here with exact version when added.
+| Library | Version | License | Used for |
+|---|---|---|---|
+| d3-force | 3.0.0 | ISC | Force-directed physics simulation that positions the constellation's nodes (link attraction, many-body repulsion, collision, centering). |
+| d3-dispatch | 3.0.1 | ISC | Internal dependency of d3-force (event dispatch). |
+| d3-quadtree | 3.0.1 | ISC | Internal dependency of d3-force (spatial index that makes repulsion fast). |
+| d3-timer | 3.0.1 | ISC | Internal dependency of d3-force (timing; unused at runtime since we tick manually). |
+
+Everything else is browser built-ins (Web Audio API, Canvas 2D) or written for
+this project.
 
 ## Tools (development only — not shipped in the app)
 
