@@ -39,8 +39,14 @@ function setStatus(text, kind) {
   statusEl.className = `status status--${kind}`;
 }
 
+let lastPitchHz = 0; // header F0 holds the last detected pitch instead of
+// flashing "—" the instant the gate closes (pitch only exists while voicing)
+
 function handleFrame(frame) {
-  pitchValueEl.textContent = frame.pitchHz > 0 ? frame.pitchHz.toFixed(0) : '—';
+  if (frame.pitchHz > 0) lastPitchHz = frame.pitchHz;
+  pitchValueEl.textContent = lastPitchHz > 0 ? lastPitchHz.toFixed(0) : '—';
+  // Dim the readout when it's a held value rather than a live one.
+  pitchValueEl.parentElement.classList.toggle('is-stale', frame.pitchHz <= 0);
   dbValueEl.textContent = isFinite(frame.db) ? frame.db.toFixed(1) : '—';
   voicedValueEl.textContent = frame.voiced ? 'OPEN' : 'SHUT';
   voicedValueEl.classList.toggle('is-voiced', frame.voiced);

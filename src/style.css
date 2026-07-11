@@ -189,6 +189,11 @@ input[type='range']::-moz-range-thumb {
   color: var(--accent);
 }
 
+/* A held (not currently live) reading dims, like a peak-hold meter */
+.hud__value.is-stale {
+  color: var(--text-dim);
+}
+
 /* Status */
 .status {
   font-size: 11px;

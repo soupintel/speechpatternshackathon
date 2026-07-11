@@ -33,14 +33,22 @@ function volumeToRadius(maxVolume) {
 }
 
 // ---- Physics tuning (each is a feel decision; adjust freely) ----
-const LINK_DISTANCE = 55; // preferred edge length between chained nodes
-const LINK_STRENGTH = 0.5;
+const SEQ_LINK_DISTANCE = 55; // preferred edge length between chained nodes
+const SEQ_LINK_STRENGTH = 0.5;
+const SIM_LINK_DISTANCE = 110; // similarity edges are longer, looser ties
+const SIM_LINK_STRENGTH = 0.08; // ...and much weaker, so they shape, not drag
 const REPULSION = -70; // forceManyBody strength (negative = repel)
 const CENTER_PULL = 0.02; // weak drift toward center
 const ALPHA_FLOOR = 0.02; // sim never fully sleeps → constellation "breathes"
-const REHEAT_ALPHA = 0.45; // energy injected when a new node arrives
+const REHEAT_ALPHA = 0.6; // energy injected when a new node arrives
 const SPAWN_JITTER = 46; // px offset when spawning near the previous node
-const SPAWN_KICK = 1.6; // initial velocity of a newborn node
+const SPAWN_KICK = 4.5; // initial velocity of a newborn node
+
+// ---- Similarity edges (what turns the string into a web) ----
+// Two voiced units are "similar" when their pitches are within about a musical
+// semitone of each other (pitch is compared on a log scale, like octaves).
+const SIM_PITCH_TOLERANCE = 0.09; // |log2(p1/p2)| below this = similar
+const SIM_MAX_PER_NODE = 2; // best matches only, so the web doesn't hairball
 
 export class Constellation {
   constructor(width, height) {
@@ -52,7 +60,9 @@ export class Constellation {
     this.sim = forceSimulation(this.nodes)
       .force(
         'link',
-        forceLink(this.links).distance(LINK_DISTANCE).strength(LINK_STRENGTH)
+        forceLink(this.links)
+          .distance((l) => (l.kind === 'seq' ? SEQ_LINK_DISTANCE : SIM_LINK_DISTANCE))
+          .strength((l) => (l.kind === 'seq' ? SEQ_LINK_STRENGTH : SIM_LINK_STRENGTH))
       )
       .force('charge', forceManyBody().strength(REPULSION))
       .force('collide', forceCollide().radius((n) => n.radius + 2))
@@ -86,16 +96,52 @@ export class Constellation {
       id: this.nodes.length,
       unit,
       radius: volumeToRadius(unit.maxVolume),
+      bornAt: performance.now(), // renderer uses this for the arrival ripple
       x: baseX + Math.cos(angle) * dist,
       y: baseY + Math.sin(angle) * dist,
-      // A little velocity kick so arrival visibly disturbs the web.
+      // A velocity kick so arrival visibly disturbs the web.
       vx: Math.cos(angle) * SPAWN_KICK,
       vy: Math.sin(angle) * SPAWN_KICK,
     };
 
     this.nodes.push(node);
     if (prev) {
-      this.links.push({ source: prev, target: node, kind: 'seq' });
+      // The speech thread: how close in time two units were spoken (0..1,
+      // 1 = said back-to-back). Renderer maps this to edge brightness.
+      const gapMs = Math.max(0, unit.startMs - prev.unit.endMs);
+      const closeness = Math.max(0, 1 - gapMs / 2000);
+      this.links.push({
+        source: prev,
+        target: node,
+        kind: 'seq',
+        closeness,
+        bornAt: node.bornAt, // renderer fades edges as they age
+      });
+    }
+
+    // Similarity edges: tie this node to the few most pitch-similar earlier
+    // nodes (excluding its chain neighbor). These cross-links are what make
+    // the artwork read as a WEB rather than a string.
+    if (unit.avgPitchHz > 0) {
+      const candidates = [];
+      for (const other of this.nodes) {
+        if (other === node || other === prev) continue;
+        if (!(other.unit.avgPitchHz > 0)) continue;
+        const diff = Math.abs(Math.log2(unit.avgPitchHz / other.unit.avgPitchHz));
+        if (diff < SIM_PITCH_TOLERANCE) {
+          candidates.push({ other, similarity: 1 - diff / SIM_PITCH_TOLERANCE });
+        }
+      }
+      candidates.sort((a, b) => b.similarity - a.similarity);
+      for (const { other, similarity } of candidates.slice(0, SIM_MAX_PER_NODE)) {
+        this.links.push({
+          source: other,
+          target: node,
+          kind: 'sim',
+          similarity,
+          bornAt: node.bornAt,
+        });
+      }
     }
 
     // Re-register arrays with the forces and inject energy so the whole
