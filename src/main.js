@@ -41,10 +41,22 @@ function setStatus(text, kind) {
 
 let lastPitchHz = 0; // header F0 holds the last detected pitch instead of
 // flashing "—" the instant the gate closes (pitch only exists while voicing)
+let pitchLockAt = -Infinity; // when the voicing gate last reopened
+let wasPitched = false;
+const F0_SETTLE_MS = 180; // F0 readout counts up briefly on gate reopen,
+// mirroring the node labels' settle-in (see render.js)
 
 function handleFrame(frame) {
+  const now = performance.now();
+  if (frame.pitchHz > 0 && !wasPitched) pitchLockAt = now; // gate reopened
+  wasPitched = frame.pitchHz > 0;
   if (frame.pitchHz > 0) lastPitchHz = frame.pitchHz;
-  pitchValueEl.textContent = lastPitchHz > 0 ? lastPitchHz.toFixed(0) : '—';
+
+  // Count the readout up toward the live value instead of snapping. Audio
+  // frames arrive every few ms, so the count-up animates without its own timer.
+  const settle = Math.min(1, (now - pitchLockAt) / F0_SETTLE_MS);
+  const shownHz = lastPitchHz * (1 - (1 - settle) * (1 - settle));
+  pitchValueEl.textContent = lastPitchHz > 0 ? shownHz.toFixed(0) : '—';
   // Dim the readout when it's a held value rather than a live one.
   pitchValueEl.parentElement.classList.toggle('is-stale', frame.pitchHz <= 0);
   dbValueEl.textContent = isFinite(frame.db) ? frame.db.toFixed(1) : '—';
