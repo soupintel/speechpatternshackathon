@@ -5,3 +5,7 @@ dist/
 *.log
 .env
 .env.local
+
+# local test/debug artifacts
+.playwright-mcp/
+phase-*.png

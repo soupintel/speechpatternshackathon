@@ -1,15 +1,18 @@
 // main.js — wires everything together.
 //
-//   AudioEngine (audio.js)  --units-->  Constellation (graph.js)
-//                                            |
-//                            Renderer (render.js) paints it every frame
+//   AudioEngine (audio.js)  --frames-->  Trajectory (trajectory.js)
+//                                             |
+//                             Renderer3D (render3d.js) paints it every frame
+//
+// (The pre-pivot 2D constellation — graph.js + render.js — lives intact on
+// the `2d-constellation` branch as the fallback.)
 //
 // This file owns the DOM: buttons, sensitivity slider, and the HUD readouts.
 
 import './style.css';
 import { AudioEngine } from './audio.js';
-import { Constellation } from './graph.js';
-import { Renderer } from './render.js';
+import { Trajectory } from './trajectory.js';
+import { Renderer3D } from './render3d.js';
 
 // ---- DOM references ----
 const micButton = document.getElementById('micButton');
@@ -30,11 +33,11 @@ const fluxValueEl = document.getElementById('fluxValue');
 const crestValueEl = document.getElementById('crestValue');
 
 // ---- The artwork ----
-// Constellation = data + physics; Renderer = paints it and ticks the physics.
-// The render loop runs from page load so the constellation keeps breathing
-// even while the mic is stopped (the artwork never resets on stop).
-const constellation = new Constellation(window.innerWidth, window.innerHeight);
-const renderer = new Renderer(canvas, constellation);
+// Trajectory = the voice's path through feature space; Renderer3D = projects
+// and paints it. The render loop runs from page load so the cube keeps
+// rotating even while the mic is stopped (the artwork never resets on stop).
+const trajectory = new Trajectory();
+const renderer = new Renderer3D(canvas, trajectory);
 renderer.start();
 
 // ---- Engine wiring ----
@@ -128,6 +131,9 @@ function updateSpectralBench(s, now) {
 function handleFrame(frame) {
   const now = performance.now();
   updateSpectralBench(frame.spectral, now);
+  if (trajectory.addFrame(now, frame.spectral, frame.pitchHz)) {
+    unitCountEl.textContent = String(trajectory.points.length);
+  }
   if (frame.pitchHz > 0 && !wasPitched) pitchLockAt = now; // gate reopened
   wasPitched = frame.pitchHz > 0;
   if (frame.pitchHz > 0) lastPitchHz = frame.pitchHz;
@@ -142,11 +148,6 @@ function handleFrame(frame) {
   dbValueEl.textContent = isFinite(frame.db) ? frame.db.toFixed(1) : '—';
   voicedValueEl.textContent = frame.voiced ? 'OPEN' : 'SHUT';
   voicedValueEl.classList.toggle('is-voiced', frame.voiced);
-}
-
-function handleUnit(unit) {
-  constellation.addUnit(unit);
-  unitCountEl.textContent = String(constellation.nodes.length);
 }
 
 function handleError(err) {
@@ -170,7 +171,7 @@ sensitivitySlider.addEventListener('input', () => {
 
 // Clear wipes the artwork — explicit action only; stopping the mic never does.
 clearButton.addEventListener('click', () => {
-  constellation.clear();
+  trajectory.clear();
   unitCountEl.textContent = '0';
 });
 
@@ -186,7 +187,6 @@ micButton.addEventListener('click', async () => {
   setStatus('requesting mic…', 'pending');
   engine = new AudioEngine({
     onFrame: handleFrame,
-    onUnit: handleUnit,
     onError: handleError,
   });
   engine.setSensitivity(parseFloat(sensitivitySlider.value));
