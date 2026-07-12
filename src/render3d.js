@@ -14,8 +14,12 @@
 //   DEPTH CUEING — near points draw larger (perspective) AND brighter; far
 //     points recede. This contrast is what makes the rotation read as a 3D
 //     body instead of a flat scribble.
-//   AGING — points settle toward a dim floor over a minute, so recent speech
-//     is bright and old speech becomes the constellation's background.
+//   AGING — nodes settle toward a dim floor over a minute, so recent speech
+//     is bright and old speech becomes the constellation's background. Age
+//     counts from a node's LAST visit, so repeating a sound re-lights the
+//     part of the constellation it lives in.
+//   RECURRENCE — edges brighten with every reuse and node size grows with
+//     visit count: the places a voice keeps returning to become landmarks.
 //   COLOR — pitch, through the same palette as the 2D build. Pitch is the
 //     one meaningful feature that is NOT an axis, so color carries it.
 //   ANNOTATIONS — the axis labels show their LIVE calibrated ranges (the
@@ -47,8 +51,12 @@ const CUBE_COLOR = 'rgba(255, 255, 255, 0.10)';
 const AXIS_COLOR = 'rgba(78, 250, 192, 0.35)'; // the three labeled edges
 const LABEL_COLOR = 'rgba(78, 250, 192, 0.7)';
 const RANGE_COLOR = 'rgba(78, 250, 192, 0.4)'; // live calibration readouts
-const LINE_ALPHA = 0.2; // the base path, constant and cheap
-const LINE_COLOR = `rgba(150, 180, 255, ${LINE_ALPHA})`;
+// Edges: base brightness, plus a step per reuse (capped) — a transition the
+// voice keeps making draws as a solid bright strand.
+const EDGE_COLOR = 'rgb(150, 180, 255)';
+const EDGE_ALPHA_BASE = 0.1;
+const EDGE_ALPHA_PER_USE = 0.06;
+const EDGE_USE_CAP = 5; // reuses beyond this stop adding brightness
 
 const POINT_RADIUS = 2.1; // px at perspective scale 1
 
@@ -268,9 +276,9 @@ export class Renderer3D {
       ctx.fillText(range, out.x - 20, out.y + 12);
     }
 
-    // -- Project every trajectory point --------------------------------------
-    const { points } = this.trajectory;
-    const n = points.length;
+    // -- Project every node ---------------------------------------------------
+    const { nodes, edges, recent } = this.trajectory;
+    const n = nodes.length;
     if (n === 0) return;
     if (this._px.length < n) {
       const cap = Math.max(n, this._px.length * 2);
@@ -287,7 +295,7 @@ export class Renderer3D {
     const bs = bounds.sprd;
     const bz = bounds.zlog;
     for (let i = 0; i < n; i++) {
-      const p = points[i];
+      const p = nodes[i];
       const x = norm(p.cent, bc);
       const y = norm(p.sprd, bs);
       const z = norm(p.zlog, bz);
@@ -301,32 +309,44 @@ export class Renderer3D {
       this._pa[i] = DEPTH_FLOOR + (1 - DEPTH_FLOOR) * Math.min(1, Math.max(0, dt));
     }
 
-    // -- 3. Base path, oldest → newest, lifting the pen at breaks ------------
-    ctx.strokeStyle = LINE_COLOR;
+    // -- 3. Edges: the transitions between places the voice has been ---------
+    // Brightness grows with how often a step was walked, dims with time
+    // since it was last walked, and carries the depth cue of its endpoints.
+    ctx.strokeStyle = EDGE_COLOR;
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let i = 0; i < n; i++) {
-      if (i === 0 || points[i].gapBefore) ctx.moveTo(this._px[i], this._py[i]);
-      else ctx.lineTo(this._px[i], this._py[i]);
+    for (const e of edges) {
+      const ageFactor =
+        AGE_FLOOR + (1 - AGE_FLOOR) * Math.max(0, 1 - (now - e.lastAt) / AGE_MS);
+      const use = Math.min(e.count - 1, EDGE_USE_CAP);
+      const depth = (this._pa[e.a] + this._pa[e.b]) / 2;
+      ctx.globalAlpha =
+        (EDGE_ALPHA_BASE + EDGE_ALPHA_PER_USE * use) * ageFactor * depth;
+      ctx.beginPath();
+      ctx.moveTo(this._px[e.a], this._py[e.a]);
+      ctx.lineTo(this._px[e.b], this._py[e.b]);
+      ctx.stroke();
     }
-    ctx.stroke();
+    ctx.globalAlpha = 1;
 
     // -- 4. Additive light: comet overlay, then glows -------------------------
     ctx.globalCompositeOperation = 'lighter';
 
-    // Comet: walk back from the head while segments are young enough.
+    // Comet: retrace the last few seconds of the walk, fading with age.
     ctx.lineWidth = 1.6;
-    for (let i = n - 1; i > 0; i--) {
-      const age = now - points[i].t;
+    for (let k = recent.length - 1; k > 0; k--) {
+      const step = recent[k];
+      const age = now - step.t;
       if (age >= TRAIL_MS) break;
-      if (points[i].gapBefore) continue; // pen was lifted — no segment here
-      const bucket = bucketOf(points[i].pitchHz);
+      if (step.gap) continue; // pen was lifted — no segment here
+      const from = recent[k - 1].idx;
+      const to = step.idx;
+      if (from === to) continue; // lingering on one node — nothing to trace
+      const bucket = bucketOf(nodes[to].pitchHz);
       ctx.strokeStyle = bucket < 0 ? UNVOICED_COLOR : BUCKET_COLORS[bucket];
-      ctx.globalAlpha =
-        TRAIL_ALPHA * (1 - age / TRAIL_MS) * this._pa[i];
+      ctx.globalAlpha = TRAIL_ALPHA * (1 - age / TRAIL_MS) * this._pa[to];
       ctx.beginPath();
-      ctx.moveTo(this._px[i - 1], this._py[i - 1]);
-      ctx.lineTo(this._px[i], this._py[i]);
+      ctx.moveTo(this._px[from], this._py[from]);
+      ctx.lineTo(this._px[to], this._py[to]);
       ctx.stroke();
     }
     ctx.lineWidth = 1;
@@ -338,13 +358,22 @@ export class Renderer3D {
     const pd = this._pd;
     this._order.sort((a, b) => pd[b] - pd[a]); // biggest depth = farthest first
 
-    // Glows: one sprite stamp per point.
+    // The head is wherever the walk currently stands. Its birth/flash
+    // effects key off the node's LAST visit, so revisiting a node pops it
+    // again — repetition is visible, not silent.
+    const head = recent.length > 0 ? recent[recent.length - 1].idx : n - 1;
+
+    // Glows: one sprite stamp per node; revisited nodes glow larger.
     for (const i of this._order) {
-      const p = points[i];
-      const age = now - p.t;
+      const p = nodes[i];
+      const age = now - p.lastAt;
       const ageFactor = AGE_FLOOR + (1 - AGE_FLOOR) * Math.max(0, 1 - age / AGE_MS);
       const r =
-        POINT_RADIUS * GLOW_EXTENT * this._ps[i] * (i === n - 1 ? birthScale(age) : 1);
+        POINT_RADIUS *
+        GLOW_EXTENT *
+        this._ps[i] *
+        weightScale(p.weight) *
+        (i === head ? birthScale(age) : 1);
       ctx.globalAlpha = GLOW_ALPHA * this._pa[i] * ageFactor;
       ctx.drawImage(this._spriteFor(bucketOf(p.pitchHz)), this._px[i] - r, this._py[i] - r, r * 2, r * 2);
     }
@@ -352,11 +381,15 @@ export class Renderer3D {
     // -- 5. Core dots: true color, normal compositing, near over far ---------
     ctx.globalCompositeOperation = 'source-over';
     for (const i of this._order) {
-      const p = points[i];
-      const age = now - p.t;
+      const p = nodes[i];
+      const age = now - p.lastAt;
       const ageFactor = AGE_FLOOR + (1 - AGE_FLOOR) * Math.max(0, 1 - age / AGE_MS);
       const bucket = bucketOf(p.pitchHz);
-      const r = POINT_RADIUS * this._ps[i] * (i === n - 1 ? birthScale(age) : 1);
+      const r =
+        POINT_RADIUS *
+        this._ps[i] *
+        weightScale(p.weight) *
+        (i === head ? birthScale(age) : 1);
       ctx.fillStyle = bucket < 0 ? UNVOICED_COLOR : BUCKET_COLORS[bucket];
       ctx.globalAlpha = Math.min(1, (0.35 + 0.65 * this._pa[i]) * (0.5 + 0.5 * ageFactor));
       ctx.beginPath();
@@ -366,9 +399,8 @@ export class Renderer3D {
     ctx.globalAlpha = 1;
 
     // -- 6. Head callout: the newest reading, digits settling in -------------
-    const head = n - 1;
-    const hp = points[head];
-    const headAge = now - hp.t;
+    const hp = nodes[head];
+    const headAge = now - hp.lastAt;
 
     // Birth flash — a brief white pop as the newest point lands.
     if (headAge < FLASH_MS) {
@@ -411,6 +443,12 @@ export class Renderer3D {
 function norm(value, b) {
   const t = (value - b.min) / (b.max - b.min);
   return Math.max(-1, Math.min(1, t * 2 - 1));
+}
+
+// How a node's drawn size grows with revisits: logarithmic and capped, so a
+// favorite vowel becomes a landmark without swallowing the cube.
+function weightScale(weight) {
+  return Math.min(2.4, 1 + 0.4 * Math.log2(weight));
 }
 
 // Sweep one full camera rotation and record the farthest any cube corner or

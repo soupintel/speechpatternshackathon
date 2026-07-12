@@ -132,7 +132,7 @@ function handleFrame(frame) {
   const now = performance.now();
   updateSpectralBench(frame.spectral, now);
   if (trajectory.addFrame(now, frame.spectral, frame.pitchHz)) {
-    unitCountEl.textContent = String(trajectory.points.length);
+    unitCountEl.textContent = String(trajectory.nodes.length);
   }
   if (frame.pitchHz > 0 && !wasPitched) pitchLockAt = now; // gate reopened
   wasPitched = frame.pitchHz > 0;
