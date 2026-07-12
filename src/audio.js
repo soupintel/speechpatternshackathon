@@ -10,7 +10,13 @@
 //   onFrame(frame)  -> fired ~60x/sec with the live measurement
 //   onUnit(unit)    -> fired once each time a completed speech unit is detected
 //
+// Since the 3D-trajectory pivot, each frame also carries `spectral` — the
+// frequency-domain features (centroid/spread/flux/crest) from spectral.js,
+// or null while the room is silent.
+//
 // Nothing here draws to the screen; that is main.js's job.
+
+import { SpectralAnalyzer } from './spectral.js';
 
 // ---- Tuning constants (all in one place so they are easy to explain/adjust) ----
 
@@ -53,6 +59,8 @@ export class AudioEngine {
     this.running = false;
 
     this.timeBuffer = null; // reused Float32Array for time-domain samples
+    this.freqBuffer = null; // reused Float32Array for the magnitude spectrum
+    this.spectral = null; // SpectralAnalyzer, created once the context exists
     this.startTime = 0; // performance.now() at start, so unit times are relative
 
     // Mic sensitivity multiplier (1 = base thresholds). Higher = registers
@@ -96,11 +104,17 @@ export class AudioEngine {
     const source = this.audioContext.createMediaStreamSource(this.mediaStream);
     this.analyser = this.audioContext.createAnalyser();
     this.analyser.fftSize = FFT_SIZE;
+    // No time-averaging of the spectrum (default is 0.8). Spectral FLUX
+    // measures exactly the frame-to-frame change that smoothing blurs away —
+    // leaving it on would make flux read artificially low and laggy.
+    this.analyser.smoothingTimeConstant = 0;
     source.connect(this.analyser);
     // Note: we deliberately do NOT connect the analyser to the destination, so the
     // user does not hear their own mic echoed back through the speakers.
 
     this.timeBuffer = new Float32Array(this.analyser.fftSize);
+    this.freqBuffer = new Float32Array(this.analyser.frequencyBinCount);
+    this.spectral = new SpectralAnalyzer(this.audioContext.sampleRate, FFT_SIZE);
     this.startTime = performance.now();
     this.running = true;
     this._resetSegmentation();
@@ -153,9 +167,14 @@ export class AudioEngine {
     const voiced = volume >= this.voiceOnVolume;
     const now = this._now();
 
+    // Frequency-domain read of the same window: the shape features that will
+    // position points in the 3D trajectory. Null while the room is silent.
+    this.analyser.getFloatFrequencyData(this.freqBuffer);
+    const spectral = this.spectral.analyze(this.freqBuffer, now);
+
     this._updateSegmentation(now, volume, pitchHz);
 
-    this.onFrame({ time: now, pitchHz, volume, db, voiced });
+    this.onFrame({ time: now, pitchHz, volume, db, voiced, spectral });
 
     this.rafId = requestAnimationFrame(() => this._tick());
   }

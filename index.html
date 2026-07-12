@@ -45,6 +45,28 @@
         </div>
         <span id="status" class="status status--idle">[ idle ]</span>
       </div>
+
+      <!-- Phase A verification bench: raw spectral features, live. TEMPORARY —
+           goes away once the 3D axes display these numbers themselves. -->
+      <div class="specbench">
+        <span class="specbench__tag">SPECTRAL</span>
+        <div class="hud__cell">
+          <span class="hud__label">CENT</span>
+          <span class="hud__value"><span id="centValue">—</span><small>Hz</small></span>
+        </div>
+        <div class="hud__cell">
+          <span class="hud__label">SPRD</span>
+          <span class="hud__value"><span id="sprdValue">—</span><small>Hz</small></span>
+        </div>
+        <div class="hud__cell">
+          <span class="hud__label">FLUX</span>
+          <span class="hud__value"><span id="fluxValue">—</span><small>/s</small></span>
+        </div>
+        <div class="hud__cell">
+          <span class="hud__label">CREST</span>
+          <span class="hud__value"><span id="crestValue">—</span><small>×</small></span>
+        </div>
+      </div>
     </header>
 
     <script type="module" src="/src/main.js"></script>

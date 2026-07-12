@@ -23,6 +23,12 @@ const sensitivitySlider = document.getElementById('sensitivity');
 const sensValueEl = document.getElementById('sensValue');
 const canvas = document.getElementById('constellation');
 
+// Phase A spectral bench (temporary — see index.html).
+const centValueEl = document.getElementById('centValue');
+const sprdValueEl = document.getElementById('sprdValue');
+const fluxValueEl = document.getElementById('fluxValue');
+const crestValueEl = document.getElementById('crestValue');
+
 // ---- The artwork ----
 // Constellation = data + physics; Renderer = paints it and ticks the physics.
 // The render loop runs from page load so the constellation keeps breathing
@@ -46,8 +52,82 @@ let wasPitched = false;
 const F0_SETTLE_MS = 180; // F0 readout counts up briefly on gate reopen,
 // mirroring the node labels' settle-in (see render.js)
 
+// ---- Phase A: spectral bench + range logging -------------------------------
+// Goal of this phase is VERIFICATION, not visuals: show the four spectral
+// features live so known sounds can be checked against expectations
+// ("ssss" → high centroid / low crest; a hum → low centroid / high crest),
+// and log each feature's observed range — those ranges become the axis
+// normalization in Phase B.
+
+const LOG_LINE_MS = 250; // compact live line, 4×/sec while sound is present
+const LOG_RANGE_MS = 5000; // observed-ranges summary cadence
+
+// Running min/max per feature over the whole session.
+const ranges = {
+  centroidHz: null, // each becomes { min, max } after the first reading
+  spreadHz: null,
+  flux: null,
+  crest: null,
+};
+let lastLineLog = 0;
+let lastRangeLog = 0;
+
+function trackRange(key, value) {
+  if (value === null || !isFinite(value)) return;
+  const r = ranges[key];
+  if (!r) ranges[key] = { min: value, max: value };
+  else {
+    r.min = Math.min(r.min, value);
+    r.max = Math.max(r.max, value);
+  }
+}
+
+function updateSpectralBench(s, now) {
+  // The bench dims (is-stale) during silence but keeps its last value, the
+  // same peak-hold behavior as the F0 readout.
+  const stale = s === null;
+  for (const el of [centValueEl, sprdValueEl, fluxValueEl, crestValueEl]) {
+    el.parentElement.classList.toggle('is-stale', stale);
+  }
+  if (stale) return;
+
+  centValueEl.textContent = s.centroidHz.toFixed(0);
+  sprdValueEl.textContent = s.spreadHz.toFixed(0);
+  // flux is null on the first voiced frame after silence (no previous frame
+  // to compare against) — keep whatever the readout showed last.
+  if (s.flux !== null) fluxValueEl.textContent = s.flux.toFixed(1);
+  crestValueEl.textContent = s.crest.toFixed(1);
+
+  trackRange('centroidHz', s.centroidHz);
+  trackRange('spreadHz', s.spreadHz);
+  trackRange('flux', s.flux);
+  trackRange('crest', s.crest);
+
+  if (now - lastLineLog >= LOG_LINE_MS) {
+    lastLineLog = now;
+    console.log(
+      `[spectral] cent=${s.centroidHz.toFixed(0)}Hz ` +
+        `sprd=${s.spreadHz.toFixed(0)}Hz ` +
+        `flux=${s.flux === null ? '—' : s.flux.toFixed(1)}/s ` +
+        `crest=${s.crest.toFixed(1)}×`,
+    );
+  }
+  if (now - lastRangeLog >= LOG_RANGE_MS) {
+    lastRangeLog = now;
+    const fmt = (r, digits) =>
+      r ? `${r.min.toFixed(digits)}…${r.max.toFixed(digits)}` : '—';
+    console.log(
+      `[spectral ranges] cent ${fmt(ranges.centroidHz, 0)}Hz | ` +
+        `sprd ${fmt(ranges.spreadHz, 0)}Hz | ` +
+        `flux ${fmt(ranges.flux, 1)}/s | ` +
+        `crest ${fmt(ranges.crest, 1)}×`,
+    );
+  }
+}
+
 function handleFrame(frame) {
   const now = performance.now();
+  updateSpectralBench(frame.spectral, now);
   if (frame.pitchHz > 0 && !wasPitched) pitchLockAt = now; // gate reopened
   wasPitched = frame.pitchHz > 0;
   if (frame.pitchHz > 0) lastPitchHz = frame.pitchHz;
